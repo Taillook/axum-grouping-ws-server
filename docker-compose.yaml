@@ -1,0 +1,25 @@
+version: '3.7'
+services:
+  app:
+    build:
+      context: .
+      target: 'develop-stage'
+      dockerfile: Dockerfile
+    environment:
+      - NATS_HOST=nats://nats:4222
+    ports:
+      - "8088:8088"
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/app/target
+    command: /bin/sh -c "cargo watch -x run"
+    networks:
+      - default
+  nats:
+    image: nats:latest
+    networks:
+      - default
+volumes:
+  cargo-cache:
+  target-cache:
