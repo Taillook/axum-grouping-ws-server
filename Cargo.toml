@@ -10,6 +10,7 @@ name = "server"
 path = "src/main.rs"
 
 [dependencies]
+# Wait for release https://github.com/tokio-rs/axum/pull/121
 axum = { git = "https://github.com/tokio-rs/axum/", rev = "045287aef9395ce6a3e18b8ae45ebae94b1ee133", features= ["ws", "headers"] }
 serde = "1.0.127"
 tokio = { version = "1", features = ["full"] }
