@@ -1,0 +1,18 @@
+[package]
+name = "axum-grouping-ws-server"
+version = "0.1.0"
+edition = "2018"
+build = "build.rs"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "server"
+path = "src/main.rs"
+
+[dependencies]
+axum = { git = "https://github.com/tokio-rs/axum/", rev = "045287aef9395ce6a3e18b8ae45ebae94b1ee133", features= ["ws", "headers"] }
+serde = "1.0.127"
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
+nats = "0.13.0"
