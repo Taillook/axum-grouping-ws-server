@@ -102,8 +102,8 @@ async fn websocket(stream: WebSocket, state: Arc<AppState>, params: Params) {
 
     let mut send_task = tokio::spawn(async move {
         let mut rx = tx.clone().subscribe();
-        while let Ok(msg) = rx.recv().await {
-            if sender.send(Message::Text(msg)).await.is_err() {
+        while let Ok(message) = rx.recv().await {
+            if sender.send(Message::Text(message)).await.is_err() {
                 break;
             }
         }
