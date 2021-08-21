@@ -7,13 +7,8 @@ use axum::{
 };
 use futures::{sink::SinkExt, stream::StreamExt};
 use serde::Deserialize;
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::{Arc, Mutex},
-    env,
-};
-use tokio::sync::broadcast;
+use std::{collections::HashMap, env, net::SocketAddr, sync::Arc};
+use tokio::sync::{broadcast, Mutex};
 
 struct AppState {
     group_list: Mutex<HashMap<String, broadcast::Sender<String>>>,
@@ -49,7 +44,7 @@ async fn main() {
             Err(_) => return,
         };
         while let Some(msg) = sub.next().await {
-            let mut group_list = app_state.group_list.lock().unwrap();
+            let mut group_list = app_state.group_list.lock().await;
 
             if let Some(group) = group_list.get_mut(&msg.subject) {
                 let converted: String = match String::from_utf8(msg.data) {
@@ -83,19 +78,32 @@ async fn websocket_handler(
 }
 
 async fn websocket(stream: WebSocket, state: Arc<AppState>, params: Params) {
-    let (mut sender, mut receiver) = stream.split();
+    let (sender, mut receiver) = stream.split();
+    let sender = Arc::new(Mutex::new(sender));
+    let broadcast_sender = sender.clone();
 
-    let tx = setup_sender(&state, &params.group_id);
+    let tx = setup_sender(&state, &params.group_id).await;
 
     let user_id = params.clone().user_id;
     let group_id = params.clone().group_id;
+
     let mut recv_task = tokio::spawn(async move {
         while let Some(Ok(message)) = receiver.next().await {
-            if let Ok(message) = message.into_text() {
-                let _drop = state
-                    .nc
-                    .publish(&group_id, format!("{}: {}", user_id, message))
-                    .await;
+            match message.clone() {
+                Message::Text(message) => {
+                    let _drop = state
+                        .nc
+                        .publish(&group_id, format!("{}: {}", user_id, message))
+                        .await;
+                }
+                Message::Binary(_) => {}
+                Message::Ping(ping) => {
+                    if sender.lock().await.send(Message::Pong(ping)).await.is_err() {
+                        break;
+                    }
+                }
+                Message::Pong(_) => {}
+                Message::Close(_) => return,
             }
         }
     });
@@ -103,7 +111,13 @@ async fn websocket(stream: WebSocket, state: Arc<AppState>, params: Params) {
     let mut send_task = tokio::spawn(async move {
         let mut rx = tx.clone().subscribe();
         while let Ok(message) = rx.recv().await {
-            if sender.send(Message::Text(message)).await.is_err() {
+            if broadcast_sender
+                .lock()
+                .await
+                .send(Message::Text(message))
+                .await
+                .is_err()
+            {
                 break;
             }
         }
@@ -115,9 +129,9 @@ async fn websocket(stream: WebSocket, state: Arc<AppState>, params: Params) {
     }
 }
 
-fn setup_sender(state: &AppState, group_id: &str) -> broadcast::Sender<String> {
+async fn setup_sender(state: &AppState, group_id: &str) -> broadcast::Sender<String> {
     let (tx, _rx) = broadcast::channel(100);
-    let mut group_list = state.group_list.lock().unwrap();
+    let mut group_list = state.group_list.lock().await;
     let group_id = group_id.to_string();
 
     match group_list.get_mut(&group_id) {
