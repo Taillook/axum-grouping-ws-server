@@ -1,4 +1,4 @@
-# axum-grouping-ws-server
+# [axum-grouping-ws-server](https://github.com/Taillook/axum-grouping-ws-server)
 
 This project is the example of grouping websocket server by [tokio-rs/axum](https://github.com/tokio-rs/axum).
 
