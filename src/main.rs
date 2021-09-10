@@ -1,4 +1,4 @@
-use axum::{prelude::*, AddExtensionLayer};
+use axum::{handler::get, AddExtensionLayer, Router};
 use std::{collections::HashMap, env, net::SocketAddr, sync::Arc};
 use tokio::sync::{broadcast, Mutex};
 mod handler;
@@ -20,11 +20,12 @@ async fn main() {
 
     let app_state = Arc::new(AppState { group_list, nc });
 
-    let app = route(
-        "/websocket/:group_id/:user_id",
-        get(handler::websocket::handler),
-    )
-    .layer(AddExtensionLayer::new(app_state.clone()));
+    let app = Router::new()
+        .route(
+            "/websocket/:group_id/:user_id",
+            get(handler::websocket::handler),
+        )
+        .layer(AddExtensionLayer::new(app_state.clone()));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8088));
 
