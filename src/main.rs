@@ -1,6 +1,13 @@
-use axum::{handler::get, AddExtensionLayer, Router};
-use std::{collections::HashMap, env, net::SocketAddr, sync::Arc};
+use axum::{
+    body::Bytes,
+    handler::get,
+    http::{HeaderMap, Request, Response},
+    AddExtensionLayer, Router,
+};
+use std::{collections::HashMap, env, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::sync::{broadcast, Mutex};
+use tower_http::{classify::ServerErrorsFailureClass, trace::TraceLayer};
+use tracing::Span;
 mod handler;
 
 pub struct AppState {
@@ -10,6 +17,8 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     let nats_host = env::var("NATS_HOST").expect("NATS_HOST is not defined");
     let nc = match nats::asynk::connect(&nats_host).await {
         Ok(nc) => nc,
@@ -25,9 +34,32 @@ async fn main() {
             "/websocket/:group_id/:user_id",
             get(handler::websocket::handler),
         )
-        .layer(AddExtensionLayer::new(app_state.clone()));
+        .layer(AddExtensionLayer::new(app_state.clone()))
+        .layer(
+            TraceLayer::new_for_http()
+                .on_request(|request: &Request<_>, _span: &Span| {
+                    tracing::debug!("started {} {}", request.method(), request.uri().path())
+                })
+                .on_response(|_response: &Response<_>, latency: Duration, _span: &Span| {
+                    tracing::debug!("response generated in {:?}", latency)
+                })
+                .on_body_chunk(|chunk: &Bytes, _latency: Duration, _span: &Span| {
+                    tracing::debug!("sending {} bytes", chunk.len())
+                })
+                .on_eos(
+                    |_trailers: Option<&HeaderMap>, stream_duration: Duration, _span: &Span| {
+                        tracing::debug!("stream closed after {:?}", stream_duration)
+                    },
+                )
+                .on_failure(
+                    |error: ServerErrorsFailureClass, _latency: Duration, _span: &Span| {
+                        tracing::debug!("something went wrong: {:?}", error)
+                    },
+                ),
+        );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 8088));
+    tracing::info!("listening on {}", addr);
 
     let mut nc_task = tokio::spawn(async move {
         let sub = match app_state.nc.subscribe("*").await {

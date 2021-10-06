@@ -6,7 +6,8 @@ services:
       target: 'develop-stage'
       dockerfile: Dockerfile
     environment:
-      - NATS_HOST=nats://nats:4222
+      NATS_HOST: nats://nats:4222
+      RUST_LOG: server=trace,tower_http=trace
     ports:
       - "8088:8088"
     volumes:
