@@ -1,6 +1,6 @@
 use axum::{
     body::Bytes,
-    handler::get,
+    routing::{get},
     http::{HeaderMap, Request, Response},
     AddExtensionLayer, Router,
 };
