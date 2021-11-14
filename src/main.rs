@@ -80,10 +80,12 @@ async fn main() {
     });
 
     let mut s_task = tokio::spawn(async move {
-        axum::Server::bind(&addr)
+        if let Err(e) = axum::Server::bind(&addr)
             .serve(app.into_make_service())
             .await
-            .unwrap();
+        {
+            println!("{:?}", e)
+        }
     });
 
     tokio::select! {
