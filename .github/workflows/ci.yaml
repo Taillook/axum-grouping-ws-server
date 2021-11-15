@@ -19,9 +19,9 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
-      - uses: actions-rs/cargo@v1
-        with:
-          command: test
+      - name: test 
+        run: |
+          docker-compose up test
       - uses: actions-rs/cargo@v1
         with:
           command: build
