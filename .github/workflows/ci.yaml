@@ -21,7 +21,7 @@ jobs:
           args: -- -D warnings
       - name: test 
         run: |
-          docker-compose up test
+          docker compose run test-ci
       - uses: actions-rs/cargo@v1
         with:
           command: build
