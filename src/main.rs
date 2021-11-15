@@ -22,19 +22,31 @@ async fn main() {
     let nats_host = env::var("NATS_HOST").expect("NATS_HOST is not defined");
     let nc = match nats::asynk::connect(&nats_host).await {
         Ok(nc) => nc,
-        Err(_) => return,
+        Err(e) => panic!("{:?}", e),
     };
 
     let group_list = Mutex::new(HashMap::new());
 
     let app_state = Arc::new(AppState { group_list, nc });
 
-    let app = Router::new()
+    let addr = SocketAddr::from(([0, 0, 0, 0], 8088));
+
+    let mut s_task = gen_server_task(app_state.clone(), addr);
+    let mut nc_task = gen_nc_task(app_state.clone());
+    tracing::info!("listening on {}", addr);
+    tokio::select! {
+        _ = (&mut nc_task) => s_task.abort(),
+        _ = (&mut s_task) => nc_task.abort(),
+    }
+}
+
+fn app(app_state: Arc<AppState>) -> Router {
+    Router::new()
         .route(
             "/websocket/:group_id/:user_id",
             get(handler::websocket::handler),
         )
-        .layer(AddExtensionLayer::new(app_state.clone()))
+        .layer(AddExtensionLayer::new(app_state))
         .layer(
             TraceLayer::new_for_http()
                 .on_request(|request: &Request<_>, _span: &Span| {
@@ -56,15 +68,14 @@ async fn main() {
                         tracing::debug!("something went wrong: {:?}", error)
                     },
                 ),
-        );
+        )
+}
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], 8088));
-    tracing::info!("listening on {}", addr);
-
-    let mut nc_task = tokio::spawn(async move {
+fn gen_nc_task(app_state: Arc<AppState>) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
         let sub = match app_state.nc.subscribe("*").await {
             Ok(sub) => sub,
-            Err(_) => return,
+            Err(e) => panic!("{:?}", e),
         };
         while let Some(msg) = sub.next().await {
             let mut group_list = app_state.group_list.lock().await;
@@ -77,19 +88,17 @@ async fn main() {
                 let _drop = group.send(converted.clone());
             }
         }
-    });
+    })
+}
 
-    let mut s_task = tokio::spawn(async move {
+fn gen_server_task(app_state: Arc<AppState>, addr: SocketAddr) -> tokio::task::JoinHandle<()> {
+    let app = app(app_state);
+    tokio::spawn(async move {
         if let Err(e) = axum::Server::bind(&addr)
             .serve(app.into_make_service())
             .await
         {
-            println!("{:?}", e)
+            panic!("{:?}", e)
         }
-    });
-
-    tokio::select! {
-        _ = (&mut nc_task) => s_task.abort(),
-        _ = (&mut s_task) => nc_task.abort(),
-    }
+    })
 }
