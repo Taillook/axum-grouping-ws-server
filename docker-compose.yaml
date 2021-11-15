@@ -21,6 +21,24 @@ services:
     image: nats:2.3.4
     networks:
       - default
+  test:
+    build:
+      context: .
+      target: 'develop-stage'
+      dockerfile: Dockerfile
+    environment:
+      NATS_HOST: nats://nats:4222
+      RUST_LOG: server=trace,tower_http=trace
+      RUST_BACKTRACE: 1
+    volumes:
+      - .:/app
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/app/target
+    command: /bin/sh -c "cargo watch -x 'test -- --nocapture'"
+    depends_on:
+      - nats
+    networks:
+      - default
 volumes:
   cargo-cache:
   target-cache:
