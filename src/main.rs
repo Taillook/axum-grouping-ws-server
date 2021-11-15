@@ -124,7 +124,8 @@ mod tests {
         gen_server_task(app_state.clone(), addr);
         gen_nc_task(app_state.clone());
 
-        let url = url::Url::parse("ws://localhost:8088/websocket/group1/user1").expect("Can't parse url");
+        let url =
+            url::Url::parse("ws://localhost:8088/websocket/group1/user1").expect("Can't parse url");
         let (ws_stream, _) = connect_async(url).await.expect("Failed to connect");
         let (mut write, mut read) = ws_stream.split();
 
