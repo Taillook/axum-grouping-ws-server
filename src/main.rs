@@ -1,7 +1,7 @@
 use axum::{
     body::Bytes,
-    routing::{get},
     http::{HeaderMap, Request, Response},
+    routing::get,
     AddExtensionLayer, Router,
 };
 use std::{collections::HashMap, env, net::SocketAddr, sync::Arc, time::Duration};
@@ -101,4 +101,40 @@ fn gen_server_task(app_state: Arc<AppState>, addr: SocketAddr) -> tokio::task::J
             panic!("{:?}", e)
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::SinkExt;
+    use futures::StreamExt;
+    use tokio_tungstenite::{connect_async, tungstenite::Message};
+
+    #[tokio::test]
+    async fn connect_websocket() {
+        let nats_host = env::var("NATS_HOST").expect("NATS_HOST is not defined");
+        let nc = match nats::asynk::connect(&nats_host).await {
+            Ok(nc) => nc,
+            Err(e) => panic!("{:?}", e),
+        };
+        let group_list = Mutex::new(HashMap::new());
+        let app_state = Arc::new(AppState { group_list, nc });
+        let addr = SocketAddr::from(([0, 0, 0, 0], 8088));
+
+        gen_server_task(app_state.clone(), addr);
+        gen_nc_task(app_state.clone());
+
+        let url =
+            url::Url::parse("ws://localhost:8088/websocket/group1/user1").expect("Can't parse url");
+        let (ws_stream, _) = connect_async(url).await.expect("Failed to connect");
+        let (mut write, mut read) = ws_stream.split();
+
+        write
+            .send(Message::Text(format!("test")))
+            .await
+            .expect("Failed to send message");
+        if let Some(Ok(message)) = read.next().await {
+            assert_eq!(message, Message::Text(format!("user1: test")));
+        }
+    }
 }
