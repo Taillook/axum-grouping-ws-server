@@ -6,19 +6,19 @@ jobs:
   build_and_test:
     name: Rust project
     runs-on: ubuntu-latest
+    services:
+      nats:
+        image: nats:2.3.4
+        ports:
+          - "4222:4222"
+    env:
+      NATS_HOST: nats://localhost:4222
     steps:
       - uses: actions/checkout@v2
-      - name: ⚡ Cache
-        uses: actions/cache@v2
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+      - uses: Swatinem/rust-cache@v1
       - uses: actions-rs/cargo@v1
         with:
           command: fmt
@@ -27,9 +27,10 @@ jobs:
         with:
           command: clippy
           args: -- -D warnings
-      - name: test 
-        run: |
-          docker compose run test-ci
+      - uses: actions-rs/cargo@v1
+        with:
+            command: test
+            args: -- --nocapture
       - uses: actions-rs/cargo@v1
         with:
           command: build
