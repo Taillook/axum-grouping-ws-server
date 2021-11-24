@@ -49,7 +49,14 @@ async fn websocket(stream: WebSocket, state: Arc<super::super::AppState>, params
                     }
                 }
                 Message::Pong(_) => {}
-                Message::Close(_) => return,
+                Message::Close(_) => {
+                    let mut group_list = state.group_list.lock().await;
+                    if let Some(group) = group_list.get_mut(&group_id) {
+                        if group.receiver_count() == 1 {
+                            group_list.remove(&group_id);
+                        }
+                    }
+                }
             }
         }
     });
