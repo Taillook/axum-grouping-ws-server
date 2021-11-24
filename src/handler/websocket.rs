@@ -76,9 +76,11 @@ async fn websocket(stream: WebSocket, state: Arc<super::super::AppState>, params
 }
 
 async fn setup_sender(state: &super::super::AppState, group_id: &str) -> broadcast::Sender<String> {
-    let (tx, _rx) = broadcast::channel(100);
     let mut group_list = state.group_list.lock().await;
     let group_id = group_id.to_string();
 
-    group_list.entry(group_id).or_insert(tx).clone()
+    group_list.entry(group_id).or_insert_with(|| {
+        let (tx, _rx) = broadcast::channel(100);
+        tx
+    }).clone()
 }
